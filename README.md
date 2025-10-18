@@ -16,6 +16,7 @@ KoboldCpp is an easy-to-use AI text-generation software for GGML and GGUF models
 - Image Generation (Stable Diffusion 1.5, SDXL, SD3, Flux)
 - Speech-To-Text (Voice Recognition) via Whisper
 - Text-To-Speech (Voice Generation) via OuteTTS, Kokoro, Parler and Dia
+- **OpenCog Autonomous Orchestrator**: Agent-based task coordination and reasoning system inspired by OpenCog
 - Provides many compatible APIs endpoints for many popular webservices (KoboldCppApi OpenAiApi OllamaApi A1111ForgeApi ComfyUiApi WhisperTranscribeApi XttsApi OpenAiSpeechApi)
 - Bundled KoboldAI Lite UI with editing tools, save formats, memory, world info, author's note, characters, scenarios.
 - Includes multiple modes (chat, adventure, instruct, storywriter) and UI Themes (aesthetic roleplay, classic writer, corporate assistant, messsenger)
@@ -76,6 +77,50 @@ KoboldCpp can now also be run on Novita AI, a newer alternative GPU cloud provid
 - **Old CPU Compatibility**: If you are having crashes or issues, you can try running in a non-avx2 compatibility mode by adding the `--noavx2` flag. You can also try reducing your `--blasbatchssize` (set -1 to avoid batching)
 
 For more information, be sure to run the program with the `--help` flag, or **[check the wiki](https://github.com/LostRuins/koboldcpp/wiki).**
+
+## OpenCog Autonomous Orchestrator (Experimental)
+
+KoboldCpp now includes an experimental OpenCog-inspired autonomous agent orchestrator system for advanced task coordination and reasoning.
+
+### Enabling the Orchestrator
+
+To enable the orchestrator, add the `--opencog` flag when starting KoboldCpp:
+
+```bash
+./koboldcpp --model your_model.gguf --opencog
+```
+
+### Features
+
+- **AtomSpace**: Graph-based knowledge representation system
+- **Multi-Agent System**: Specialized agents for planning, reasoning, and execution
+- **Autonomous Goal Processing**: Submit high-level goals that are automatically decomposed and executed
+- **Knowledge Base**: Persistent knowledge storage with probabilistic truth values
+- **API Integration**: RESTful API endpoints for agent interaction
+
+### API Endpoints
+
+- `/api/extra/opencog/status` - Get orchestrator status
+- `/api/extra/opencog/submit_goal` - Submit high-level goals
+- `/api/extra/opencog/submit_task` - Submit tasks to specific agents
+- `/api/extra/opencog/query` - Query the knowledge base
+- `/api/extra/opencog/atomspace` - Get knowledge base snapshot
+
+### Quick Example
+
+```python
+import requests
+
+# Submit a goal
+response = requests.post("http://localhost:5001/api/extra/opencog/submit_goal",
+    json={"goal": "Generate creative story ideas", "priority": 0.8})
+
+# Check status
+status = requests.get("http://localhost:5001/api/extra/opencog/status").json()
+print(status)
+```
+
+For complete documentation, see [docs/OPENCOG_ORCHESTRATOR.md](docs/OPENCOG_ORCHESTRATOR.md) and [examples/opencog_example.py](examples/opencog_example.py).
 
 ## Compiling KoboldCpp From Source Code
 

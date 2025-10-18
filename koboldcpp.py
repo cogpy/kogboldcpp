@@ -3597,7 +3597,7 @@ Change Mode<br>
         return
 
     def do_POST(self):
-        global modelbusy, requestsinqueue, currentusergenkey, totalgens, pendingabortkey, lastuploadedcomfyimg, lastgeneratedcomfyimg, multiplayer_turn_major, multiplayer_turn_minor, multiplayer_story_data_compressed, multiplayer_dataformat, multiplayer_lastactive, net_save_slots, has_vision_support
+        global modelbusy, requestsinqueue, currentusergenkey, totalgens, pendingabortkey, lastuploadedcomfyimg, lastgeneratedcomfyimg, multiplayer_turn_major, multiplayer_turn_minor, multiplayer_story_data_compressed, multiplayer_dataformat, multiplayer_lastactive, net_save_slots, has_vision_support, opencog_orchestrator, opencog_enabled
         contlenstr = self.headers['content-length']
         content_length = 0
         body = None
@@ -3719,7 +3719,6 @@ Change Mode<br>
         elif self.path.endswith('/api/extra/opencog/status'):
             if not self.secure_endpoint():
                 return
-            global opencog_orchestrator, opencog_enabled
             if not opencog_available or not opencog_enabled or not opencog_orchestrator:
                 response_body = (json.dumps({"enabled": False, "error": "OpenCog orchestrator not available or not enabled"}).encode())
             else:
@@ -3733,7 +3732,6 @@ Change Mode<br>
         elif self.path.endswith('/api/extra/opencog/submit_goal'):
             if not self.secure_endpoint():
                 return
-            global opencog_orchestrator, opencog_enabled
             if not opencog_available or not opencog_enabled or not opencog_orchestrator:
                 response_code = 503
                 response_body = (json.dumps({"success": False, "error": "OpenCog orchestrator not available"}).encode())
@@ -3755,7 +3753,6 @@ Change Mode<br>
         elif self.path.endswith('/api/extra/opencog/submit_task'):
             if not self.secure_endpoint():
                 return
-            global opencog_orchestrator, opencog_enabled
             if not opencog_available or not opencog_enabled or not opencog_orchestrator:
                 response_code = 503
                 response_body = (json.dumps({"success": False, "error": "OpenCog orchestrator not available"}).encode())
@@ -3779,7 +3776,6 @@ Change Mode<br>
         elif self.path.endswith('/api/extra/opencog/query'):
             if not self.secure_endpoint():
                 return
-            global opencog_orchestrator, opencog_enabled
             if not opencog_available or not opencog_enabled or not opencog_orchestrator:
                 response_code = 503
                 response_body = (json.dumps({"success": False, "error": "OpenCog orchestrator not available"}).encode())
@@ -3796,7 +3792,6 @@ Change Mode<br>
         elif self.path.endswith('/api/extra/opencog/atomspace'):
             if not self.secure_endpoint():
                 return
-            global opencog_orchestrator, opencog_enabled
             if not opencog_available or not opencog_enabled or not opencog_orchestrator:
                 response_code = 503
                 response_body = (json.dumps({"success": False, "error": "OpenCog orchestrator not available"}).encode())
@@ -6902,7 +6897,7 @@ def unregister_koboldcpp():
         print(f"Unregister Extensions: An error occurred: {e}")
 
 def main(launch_args, default_args):
-    global args, showdebug, kcpp_instance, exitcounter, using_gui_launcher, sslvalid, global_memory
+    global args, showdebug, kcpp_instance, exitcounter, using_gui_launcher, sslvalid, global_memory, opencog_orchestrator, opencog_enabled
     args = launch_args #note: these are NOT shared with the child processes!
 
     if (args.version) and len(sys.argv) <= 2:
@@ -7831,7 +7826,6 @@ def kcpp_main_process(launch_args, g_memory=None, gui_launcher=False):
 
     if start_server:
         # Initialize OpenCog orchestrator if enabled
-        global opencog_orchestrator, opencog_enabled
         if args.opencog and opencog_available:
             try:
                 print("Initializing OpenCog autonomous orchestrator...")
