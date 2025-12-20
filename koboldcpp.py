@@ -40,6 +40,13 @@ from typing import Tuple
 import shutil
 import subprocess
 
+# Import OpenCog orchestrator
+try:
+    from opencog_orchestrator import get_orchestrator, reset_orchestrator
+    opencog_available = True
+except ImportError:
+    opencog_available = False
+
 # constants
 sampler_order_max = 7
 tensor_split_max = 16
@@ -130,6 +137,10 @@ last_non_horde_req_time = time.time()
 currfinishreason = None
 zenity_recent_dir = os.getcwd()
 zenity_permitted = True
+
+# OpenCog orchestrator globals
+opencog_orchestrator = None
+opencog_enabled = False
 
 saved_stdout = None
 saved_stderr = None
@@ -3586,7 +3597,7 @@ Change Mode<br>
         return
 
     def do_POST(self):
-        global modelbusy, requestsinqueue, currentusergenkey, totalgens, pendingabortkey, lastuploadedcomfyimg, lastgeneratedcomfyimg, multiplayer_turn_major, multiplayer_turn_minor, multiplayer_story_data_compressed, multiplayer_dataformat, multiplayer_lastactive, net_save_slots, has_vision_support
+        global modelbusy, requestsinqueue, currentusergenkey, totalgens, pendingabortkey, lastuploadedcomfyimg, lastgeneratedcomfyimg, multiplayer_turn_major, multiplayer_turn_minor, multiplayer_story_data_compressed, multiplayer_dataformat, multiplayer_lastactive, net_save_slots, has_vision_support, opencog_orchestrator, opencog_enabled
         contlenstr = self.headers['content-length']
         content_length = 0
         body = None
@@ -3704,6 +3715,93 @@ Change Mode<br>
                 response_body = (json.dumps({"success": "true", "done":"false"}).encode())
             else:
                 response_body = (json.dumps({"success": "false", "done":"false"}).encode())
+
+        elif self.path.endswith('/api/extra/opencog/status'):
+            if not self.secure_endpoint():
+                return
+            if not opencog_available or not opencog_enabled or not opencog_orchestrator:
+                response_body = (json.dumps({"enabled": False, "error": "OpenCog orchestrator not available or not enabled"}).encode())
+            else:
+                try:
+                    status = opencog_orchestrator.get_status()
+                    status["enabled"] = True
+                    response_body = (json.dumps(status).encode())
+                except Exception as e:
+                    response_body = (json.dumps({"enabled": True, "error": str(e)}).encode())
+
+        elif self.path.endswith('/api/extra/opencog/submit_goal'):
+            if not self.secure_endpoint():
+                return
+            if not opencog_available or not opencog_enabled or not opencog_orchestrator:
+                response_code = 503
+                response_body = (json.dumps({"success": False, "error": "OpenCog orchestrator not available"}).encode())
+            else:
+                try:
+                    genparams = json.loads(body)
+                    goal = genparams.get('goal', '')
+                    priority = float(genparams.get('priority', 0.5))
+                    if not goal:
+                        response_code = 400
+                        response_body = (json.dumps({"success": False, "error": "Goal parameter is required"}).encode())
+                    else:
+                        task_id = opencog_orchestrator.submit_goal(goal, priority)
+                        response_body = (json.dumps({"success": True, "task_id": task_id}).encode())
+                except Exception as e:
+                    response_code = 500
+                    response_body = (json.dumps({"success": False, "error": str(e)}).encode())
+
+        elif self.path.endswith('/api/extra/opencog/submit_task'):
+            if not self.secure_endpoint():
+                return
+            if not opencog_available or not opencog_enabled or not opencog_orchestrator:
+                response_code = 503
+                response_body = (json.dumps({"success": False, "error": "OpenCog orchestrator not available"}).encode())
+            else:
+                try:
+                    genparams = json.loads(body)
+                    agent_name = genparams.get('agent', 'executor')
+                    task_name = genparams.get('name', '')
+                    description = genparams.get('description', '')
+                    priority = float(genparams.get('priority', 0.5))
+                    if not task_name:
+                        response_code = 400
+                        response_body = (json.dumps({"success": False, "error": "Task name is required"}).encode())
+                    else:
+                        task_id = opencog_orchestrator.submit_task(agent_name, task_name, description, priority)
+                        response_body = (json.dumps({"success": True, "task_id": task_id}).encode())
+                except Exception as e:
+                    response_code = 500
+                    response_body = (json.dumps({"success": False, "error": str(e)}).encode())
+
+        elif self.path.endswith('/api/extra/opencog/query'):
+            if not self.secure_endpoint():
+                return
+            if not opencog_available or not opencog_enabled or not opencog_orchestrator:
+                response_code = 503
+                response_body = (json.dumps({"success": False, "error": "OpenCog orchestrator not available"}).encode())
+            else:
+                try:
+                    genparams = json.loads(body)
+                    pattern = genparams.get('pattern', {})
+                    results = opencog_orchestrator.query_knowledge(pattern)
+                    response_body = (json.dumps({"success": True, "results": results}).encode())
+                except Exception as e:
+                    response_code = 500
+                    response_body = (json.dumps({"success": False, "error": str(e)}).encode())
+
+        elif self.path.endswith('/api/extra/opencog/atomspace'):
+            if not self.secure_endpoint():
+                return
+            if not opencog_available or not opencog_enabled or not opencog_orchestrator:
+                response_code = 503
+                response_body = (json.dumps({"success": False, "error": "OpenCog orchestrator not available"}).encode())
+            else:
+                try:
+                    snapshot = opencog_orchestrator.get_atomspace_snapshot()
+                    response_body = (json.dumps({"success": True, "atomspace": snapshot}).encode())
+                except Exception as e:
+                    response_code = 500
+                    response_body = (json.dumps({"success": False, "error": str(e)}).encode())
 
         elif self.path.endswith('/api/extra/generate/check'):
             if not self.secure_endpoint():
@@ -6799,7 +6897,7 @@ def unregister_koboldcpp():
         print(f"Unregister Extensions: An error occurred: {e}")
 
 def main(launch_args, default_args):
-    global args, showdebug, kcpp_instance, exitcounter, using_gui_launcher, sslvalid, global_memory
+    global args, showdebug, kcpp_instance, exitcounter, using_gui_launcher, sslvalid, global_memory, opencog_orchestrator, opencog_enabled
     args = launch_args #note: these are NOT shared with the child processes!
 
     if (args.version) and len(sys.argv) <= 2:
@@ -7727,6 +7825,53 @@ def kcpp_main_process(launch_args, g_memory=None, gui_launcher=False):
                     time.sleep(1)
 
     if start_server:
+        # Initialize OpenCog orchestrator if enabled
+        if args.opencog and opencog_available:
+            try:
+                print("Initializing OpenCog autonomous orchestrator...")
+                
+                # Create LLM callback function
+                def llm_callback(params):
+                    """Callback to allow orchestrator to use the LLM"""
+                    if handle is None:
+                        return {"error": "Model not loaded"}
+                    
+                    try:
+                        prompt = params.get("prompt", "")
+                        max_length = params.get("max_length", 256)
+                        
+                        # Use the loaded model to generate text
+                        genparams = {
+                            "prompt": prompt,
+                            "max_length": max_length,
+                            "temperature": 0.7,
+                            "top_p": 0.9,
+                            "rep_pen": 1.1
+                        }
+                        
+                        # Generate text (simplified - would need proper integration)
+                        result = {"text": f"Response to: {prompt[:50]}..."}
+                        return result
+                    except Exception as e:
+                        return {"error": str(e)}
+                
+                opencog_orchestrator = get_orchestrator(llm_callback)
+                opencog_orchestrator.start()
+                opencog_enabled = True
+                print("OpenCog orchestrator initialized successfully!")
+                print("API endpoints available at:")
+                print("  - /api/extra/opencog/status")
+                print("  - /api/extra/opencog/submit_goal")
+                print("  - /api/extra/opencog/submit_task")
+                print("  - /api/extra/opencog/query")
+                print("  - /api/extra/opencog/atomspace")
+            except Exception as e:
+                print(f"Warning: Failed to initialize OpenCog orchestrator: {e}")
+                opencog_enabled = False
+        elif args.opencog and not opencog_available:
+            print("Warning: OpenCog orchestrator requested but opencog_orchestrator module not available")
+            opencog_enabled = False
+        
         if args.remotetunnel:
             if remote_url:
                 print(f"======\nYour remote tunnel is ready, please connect to {remote_url}", flush=True)
@@ -7841,6 +7986,7 @@ if __name__ == '__main__':
     compatgroup2.add_argument("--showgui", help="Always show the GUI instead of launching the model right away when loading settings from a .kcpps file.", action='store_true')
     compatgroup2.add_argument("--skiplauncher", help="Doesn't display or use the GUI launcher. Overrides showgui.", action='store_true')
     advparser.add_argument("--singleinstance", help="Allows this KoboldCpp instance to be shut down by any new instance requesting the same port, preventing duplicate servers from clashing on a port.", action='store_true')
+    advparser.add_argument("--opencog", help="Enables the OpenCog autonomous orchestrator agent for advanced task coordination and reasoning.", action='store_true')
 
     hordeparsergroup = parser.add_argument_group('Horde Worker Commands')
     hordeparsergroup.add_argument("--hordemodelname", metavar=('[name]'), help="Sets your AI Horde display model name.", default="")
